@@ -14,7 +14,7 @@ script:
 - |
   ./sqcogspur64linuxht/bin/squeak  \
   -vm-display-null \
-  ./Cuis5.0-3795.image \
+  $(ls | grep 'Cuis5.0-[0-9]\+.image') \
   -d "Transcript logToStdout: true" \
   -d "Utilities classPool at: #AuthorName put: 'TravisCI'" \
   -d "Utilities classPool at: #AuthorInitials put: 'TCI'" \
