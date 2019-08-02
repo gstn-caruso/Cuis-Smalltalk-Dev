@@ -15,8 +15,4 @@ script:
   ./sqcogspur64linuxht/bin/squeak  \
   -vm-display-null \
   $(ls | grep 'Cuis5.0-[0-9]\+.image') \
-  -d "Transcript logToStdout: true" \
-  -d "Utilities classPool at: #AuthorName put: 'TravisCI'" \
-  -d "Utilities classPool at: #AuthorInitials put: 'TCI'" \
-  -d "CodePackageFile installPackage: './Packages/BaseImageTests.pck.st' asFileEntry" \
   -s runTests.st

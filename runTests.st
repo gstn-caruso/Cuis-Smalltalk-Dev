@@ -1,16 +1,20 @@
-|suite result report exitCode|
+|suite result exitCode|
 
-ChangeSet fileIn: './JUnitTestResultReport.st' asFileEntry.
+Utilities classPool at: #AuthorName put: 'TravisCI'.
+Utilities classPool at: #AuthorInitials put: 'TCI'.
 
-suite _ TestSuite new.
-TestCase allSubclassesDo: [ :testCase | testCase addToSuiteFromSelectors: suite].
-result := suite run.
+CodePackageFile installPackage: './Packages/BaseImageTests.pck.st' asFileEntry.
 
-report := JUnitTestResultReport from: result.
-report writeToFile: (DirectoryEntry currentDirectory // 'report.xml').
+ChangeSet fileIn: './TestRunCiReport.cs.st' asFileEntry.
 
-exitCode := (result hasFailures or: [ result hasErrors ])
-	ifTrue: [ 1 ]
-	ifFalse: [ 0 ].
+testSuite := TestSuite new.
+testCases := TestCase allSubclasses reject: [:testCase | testCase isAbstract].
+testCases do: [:testCase | testCase addToSuiteFromSelectors: testSuite].
+
+result := testSuite run.
+
+result printReport.
+
+exitCode := (result hasFailures or: [ result hasErrors ]) ifTrue: [ 1 ] ifFalse: [ 0 ].
 
 Smalltalk quitPrimitive: exitCode
