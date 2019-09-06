@@ -18,8 +18,8 @@ script:
   - ./sqcogspur64linuxht/bin/squeak -vm-display-null cuis.image -s runTests.st
   - cp -r sqcogspur64linuxht release/vm
   - cp -r Packages release
-  - cp CuisV5.sources "$IMAGE_FILE" "$CHANGES_FILE"  release
-  - tar -czvf cuis-linux-x64.tar.gz release
+  - cp CuisV5.sources "$IMAGE_FILE" "$CHANGES_FILE" release
+  - tar -czvf cuis-linux-x64.tar.gz ./release
 
 before_deploy:
   # Set up git user name and tag this commit
