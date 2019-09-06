@@ -11,21 +11,23 @@ before_install:
   - echo ./sqcogspur64linuxht/bin/squeak --version
 
 script:
-- |
-  ./sqcogspur64linuxht/bin/squeak  \
-  -vm-display-null \
-  $(ls | grep 'Cuis5.0-[0-9]\+.image') \
-  -s runTests.st
+  - IMAGE_FILE="$(ls | grep 'Cuis5.0-[0-9]\+.image')"
+  - cp -r sqcogspur64linuxht vm
+  - cp "$IMAGE_FILE" cuis.image
+  - ./sqcogspur64linuxht/bin/squeak -vm-display-null cuis.image -s runTests.st
+  - tar -czvf cuis-linux-x64.tar.gz "$IMAGE_FILE" vm
+
+before_deploy:
+  # Set up git user name and tag this commit
+  - git config --local user.name cuis_dev
+  - git config --local user.email mailman@cuis-smalltalk.org
+  - export TRAVIS_TAG=${TRAVIS_TAG:-$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)}
+  - git tag $TRAVIS_TAG
 
 deploy:
   provider: releases
   api_key: $GITHUB_TOKEN
-  file: "cuis.sh"
+  file: "cuis-linux-x64.tar.gz"
   skip_cleanup: true
 
-before_deploy:
-	# Set up git user name and tag this commit
-	- git config --local user.name cuis_dev
-	- git config --local user.email mailman@cuis-smalltalk.org
-	- export TRAVIS_TAG=${TRAVIS_TAG:-$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)}
-	- git tag $TRAVIS_TAG
+
