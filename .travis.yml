@@ -22,5 +22,10 @@ deploy:
   api_key: $GITHUB_TOKEN
   file: "cuis.sh"
   skip_cleanup: true
-  on:
-    tags: true
+
+before_deploy:
+	# Set up git user name and tag this commit
+	- git config --local user.name cuis_dev
+	- git config --local user.email mailman@cuis-smalltalk.org
+	- export TRAVIS_TAG=${TRAVIS_TAG:-$(date +'%Y%m%d%H%M%S')-$(git log --format=%h -1)}
+	- git tag $TRAVIS_TAG
