@@ -8,9 +8,10 @@ os:
 before_install:
   - wget https://github.com/OpenSmalltalk/opensmalltalk-vm/releases/download/201901172323/squeak.cog.spur_linux64x64_201901172323.tar.gz
   - tar -xvzf squeak.cog.spur_linux64x64_201901172323.tar.gz
-  - echo ./sqcogspur64linuxht/bin/squeak --version
+  - ./sqcogspur64linuxht/bin/squeak --version
 
 script:
+  - ./installUpdates.sh
   - ./runTests.sh
 
 before_deploy:
@@ -26,5 +27,3 @@ deploy:
   api_key: $GITHUB_TOKEN
   file: "cuis-linux-x64.tar.gz"
   skip_cleanup: true
-
-
