@@ -3,6 +3,10 @@
 Utilities classPool at: #AuthorName put: 'TravisCI'.
 Utilities classPool at: #AuthorInitials put: 'TCI'.
 
+"We do this so that we avoid opening a popup that needs to be dismissed manually by the user"
+Smalltalk class compile: 'aboutThisSystem'.
+ChangeSet installNewUpdates.
+
 CodePackageFile installPackage: './Packages/BaseImageTests.pck.st' asFileEntry.
 
 ChangeSet fileIn: './TestRunCiReport.cs.st' asFileEntry.
