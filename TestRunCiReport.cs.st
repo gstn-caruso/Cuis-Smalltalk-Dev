@@ -10,11 +10,11 @@ print: aString
 
 !TestResult methodsFor: 'running' stamp: 'GC 8/5/2019 18:54:41'!
 printInGreen: aString
-	self print: ('{1}[92m{2}{1}[39m' format: { (Character asciiValue: 27) asString . aString })! !
+	self print: ('{1}33[32;1m{2}{1}[33m' format: { (Character asciiValue: 0) asString . aString })! !
 
 !TestResult methodsFor: 'running' stamp: 'GC 8/5/2019 18:53:28'!
 printInRed: aString
-	self print: ('{1}[91m{2}{1}[39m' format: { (Character asciiValue: 27) asString . aString })! !
+	self print: ('{1}33[31;1m{2}{1}[33m' format: { (Character asciiValue: 0) asString . aString })! !
 
 !TestResult methodsFor: 'running' stamp: 'GC 8/5/2019 18:55:16'!
 reportError: aTestCase because: anExceptionSignal
