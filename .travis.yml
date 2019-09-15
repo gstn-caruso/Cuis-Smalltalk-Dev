@@ -6,11 +6,6 @@ git:
 os:
   - linux
 
-addons:
-  apt:
-    packages:
-      - expect-dev # for unbuffer
-
 before_install:
   - wget https://github.com/OpenSmalltalk/opensmalltalk-vm/releases/download/201901172323/squeak.cog.spur_linux64x64_201901172323.tar.gz
   - tar -xvzf squeak.cog.spur_linux64x64_201901172323.tar.gz
@@ -18,4 +13,4 @@ before_install:
 
 script:
   - .ContinuousIntegrationScripts/installUpdates.sh
-  - unbuffer .ContinuousIntegrationScripts/runTests.sh
+  - .ContinuousIntegrationScripts/runTests.sh
