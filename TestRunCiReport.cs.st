@@ -57,13 +57,7 @@ reportPassed: aTestCase
 
 	"Transcript show: 'finished.'; newLine."
 	
-	| out inGreen |
-	inGreen _ [:aString |
-		'{1}[92m{2}{1}[39m' format: { (Character asciiValue: 27) asString . aString }
-	].
-	out _ StdIOWriteStream stdout.
-	
-	out nextPutAll: (inGreen value: ('{1} has passed' format: {aTestCase asString})); newLine! !
+	self printInGreen: ('{1} has passed' format: {aTestCase asString})! !
 
 
 !TestResult methodsFor: 'running' stamp: 'GC 8/2/2019 17:48:48'!
