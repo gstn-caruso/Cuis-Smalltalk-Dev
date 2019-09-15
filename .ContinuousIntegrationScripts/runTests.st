@@ -5,7 +5,7 @@ Utilities classPool at: #AuthorInitials put: 'TCI'.
 
 CodePackageFile installPackage: './Packages/BaseImageTests.pck.st' asFileEntry.
 
-ChangeSet fileIn: './TestRunCiReport.cs.st' asFileEntry.
+ChangeSet fileIn: './.ContinuousIntegrationScripts/TestRunCiReport.cs.st' asFileEntry.
 
 testSuite := TestSuite new.
 testCases := TestCase allSubclasses reject: [:testCase | testCase isAbstract].
