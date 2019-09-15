@@ -8,7 +8,7 @@ TEST_TEMPORAL_IMG="$TEST_TEMPORAL_DIR/cuis.image"
 
 cp "$IMAGE_FILE" "$TEST_TEMPORAL_IMG"
 
-./sqcogspur64linuxht/bin/squeak -vm-display-null "$TEST_TEMPORAL_IMG" -s runTests.st
+sqcogspur64linuxht/bin/squeak -vm-display-null "$TEST_TEMPORAL_IMG" -s .ContinuousIntegrationScripts/runTests.st
 
 rm -r "$TEST_TEMPORAL_DIR"
  

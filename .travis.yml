@@ -1,4 +1,5 @@
 language: minimal
+
 git:
   depth: 1
 
@@ -8,8 +9,8 @@ os:
 before_install:
   - wget https://github.com/OpenSmalltalk/opensmalltalk-vm/releases/download/201901172323/squeak.cog.spur_linux64x64_201901172323.tar.gz
   - tar -xvzf squeak.cog.spur_linux64x64_201901172323.tar.gz
-  - ./sqcogspur64linuxht/bin/squeak --version
+  - sqcogspur64linuxht/bin/squeak --version
 
 script:
-  - ./installUpdates.sh
-  - ./runTests.sh
+  - .ContinuousIntegrationScripts/installUpdates.sh
+  - .ContinuousIntegrationScripts/runTests.sh
