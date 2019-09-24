@@ -23,9 +23,20 @@ installVmMacOS() {
   sudo cp -rf Squeak.app /Applications
 }
 
+installVmWindows() {
+  VM_FILENAME="squeak.cog.spur_win64x64_$VM_VERSION"
+  
+  wget "$BASE_VM_DOWNLOAD_PATH/$VM_FILENAME.zip"
+  unzip "$VM_FILENAME.zip"
+
+  ./SqueakConsole.exe -headless -version
+}
+
 case $TRAVIS_OS_NAME in
   "linux")
     installVmLinux ;;
   "osx")
     installVmMacOS ;;
+  "windows")
+    installVmWindows ;;
 esac
