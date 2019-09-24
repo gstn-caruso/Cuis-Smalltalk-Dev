@@ -24,6 +24,9 @@ installVmMacOS() {
 }
 
 installVmWindows() {
+  docker pull mcr.microsoft.com/windows/insider:10.0.17134
+  docker ps -a
+
   VM_FILENAME="squeak.cog.spur_win64x64_$VM_VERSION"
   
   wget "$BASE_VM_DOWNLOAD_PATH/$VM_FILENAME.zip"

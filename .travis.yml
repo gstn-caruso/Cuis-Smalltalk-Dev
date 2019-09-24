@@ -1,4 +1,6 @@
 language: bash
+services: 
+  - docker
 
 git:
   depth: 1
