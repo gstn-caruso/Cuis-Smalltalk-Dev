@@ -3,6 +3,8 @@
 set -euo pipefail
 
 IMAGE_FILE="$(ls | grep 'Cuis5.0-[0-9]\+.image')"
+IMAGE32_FILE="$(ls | grep 'Cuis5.0-[0-9]\+-32.image')"
+PROCESSOR_TYPE="$(uname -m)"
 
 INSTALL_UPDATES_SCRIPT="\
   Utilities classPool at: #AuthorName put: 'TravisCI'.
@@ -12,7 +14,12 @@ INSTALL_UPDATES_SCRIPT="\
 "
 
 installUpdatesLinux() {
-  ./sqcogspur64linuxht/bin/squeak -vm-display-null "$IMAGE_FILE" -d "$INSTALL_UPDATES_SCRIPT"
+  case $PROCESSOR_TYPE in
+  "x86_64")
+    ./sqcogspur64linuxht/bin/squeak -vm-display-null "$IMAGE_FILE" -d "$INSTALL_UPDATES_SCRIPT" ;;
+  "aarch64")
+    ./sqcogspurlinuxhtRPi/bin/squeak -vm-display-null "$IMAGE32_FILE" -d "$INSTALL_UPDATES_SCRIPT" ;;
+  esac
 }
 
 installUpdatesMacOS() {

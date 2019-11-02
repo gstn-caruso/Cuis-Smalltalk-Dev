@@ -3,6 +3,10 @@ language: minimal
 git:
   depth: 1
 
+arch:
+  - amd64
+  - arm64
+
 os:
   - linux
   - osx
