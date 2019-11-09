@@ -1,11 +1,11 @@
-'From Cuis 5.0 of 7 November 2016 [latest update: #3695] on 11 April 2019 at 3:36:48 pm'!
+'From Cuis 5.0 of 7 November 2016 [latest update: #3686] on 31 March 2019 at 4:57:31 am'!
 'Description Description - This package is a port and refactoring of WebClient from http://ss3.gemstone.com/ss/WebClient.html with moderate changes by David Graham and Juan Vuletich.
 	- WebClient-Core-ul.100
 	- WebClient-Help-ar.10
 	- WebClient-Tests-topa.48'!
 !provides: 'WebClient' 1 18!
-!requires: 'Network-Kernel' 1 2 nil!
 !requires: 'Cryptography-DigitalSignatures' 1 7 nil!
+!requires: 'Network-Kernel' 1 2 nil!
 !requires: 'Identities-UUID' 1 7 nil!
 SystemOrganization addCategory: #'WebClient-Core'!
 SystemOrganization addCategory: #'WebClient-SqueakSSL-Core'!
@@ -3833,15 +3833,15 @@ sendRequest: request contentBlock: contentBlock
 	^response! !
 
 !WebClient methodsFor: 'sending' stamp: 'ar 8/12/2010 21:37'!
-writeCookiesFor: request on: aStream
+writeCookiesFor: request on: stream
 	"Write the cookies for a particular request"
 
 	(cookies select:[:ck| (request acceptsCookie: ck from: self )]) ifNotEmpty:[:ckset|
-		aStream nextPutAll: 'Cookie: '.
+		stream nextPutAll: 'Cookie: '.
 		ckset 
-			do:[:ck| aStream nextPutAll: ck name,'=', ck value]
-			separatedBy:[aStream  nextPutAll:'; '].
-		aStream crlf.
+			do:[:ck| stream nextPutAll: ck name,'=', ck value]
+			separatedBy:[stream  nextPutAll:'; '].
+		stream crlf.
 	].
 ! !
 
@@ -6268,7 +6268,7 @@ dispatchRequest: request
 
 	^self dispatchRequest: request url: request url! !
 
-!WebServer methodsFor: 'handling' stamp: 'ar 7/28/2010 20:11'!
+!WebServer methodsFor: 'handling' stamp: 'GC 3/30/2019 21:08:44'!
 dispatchRequest: request url: dispatchUrl
 	"Look up the handler for a given url and dispatch to it"
 
@@ -6284,10 +6284,10 @@ dispatchRequest: request url: dispatchUrl
 	(entryUrl beginsWith: '/') ifFalse:[entryUrl := '/', entryUrl].
 	mutex critical:[
 		[entryUrl notEmpty and:[action == nil]] whileTrue: [
-			action := entryPoints at: entryUrl ifAbsent:[nil].
+			action := self request: request.
 			entryUrl := entryUrl copyUpToLast: $/.
 		].
-		action ifNil:[action := entryPoints at: '/' ifAbsent:[nil]].
+		action ifNil:[ action := self request: request ].
 	].
 
 	"Handle OPTIONS requests"
@@ -6305,6 +6305,7 @@ dispatchRequest: request url: dispatchUrl
 		or:[(action at: 1) includes: request method]) ifFalse:[
 			^request send405Response: self builtinHttpMethods, action first.
 		].
+	
 
 	^[self invokeAction: (action at: 2) request: request] 
 		on: Error do:[:ex|
@@ -6380,6 +6381,11 @@ newRequest
 	^(WebRequest new)
 		server: self;
 		yourself! !
+
+!WebServer methodsFor: 'handling' stamp: 'GC 3/30/2019 21:08:44'!
+request: request
+
+	^ entryPoints at: request url ifAbsent: [ nil ]! !
 
 !WebServer methodsFor: 'authentication' stamp: 'ar 3/30/2010 20:43'!
 authAccept: method request: request realm: realm header: authHeader
@@ -7738,7 +7744,7 @@ send: data code: opcode final: isFinal
 
 	^self send: data code: opcode final: isFinal mask: self masking! !
 
-!WebSocket07 methodsFor: 'read/write' stamp: 'jmv 4/11/2019 15:34:42'!
+!WebSocket07 methodsFor: 'read/write' stamp: 'jmv 2/26/2016 17:11'!
 send: data code: opcode final: isFinal mask: doMask
 	"Sends unfragmented data using the given opcode"
 
@@ -7749,9 +7755,7 @@ send: data code: opcode final: isFinal mask: doMask
 		data size > 16rFFFF ifTrue:[
 			byte2 := 127.
 			xLength := ByteArray new: 8.
-			(WriteStream on: xLength)
-				nextUnsignedInt32Put: data size >> 32 bigEndian: true;
-				nextUnsignedInt32Put: (data size bitAnd: 16rFFFFFFFF) bigEndian: true.
+			(WriteStream on: xLength) nextNumber: 8 put: data size.
 		] ifFalse:[
 			byte2 := 126.
 			xLength := ByteArray new: 2.
