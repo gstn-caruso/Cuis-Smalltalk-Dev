@@ -12,6 +12,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
+        include:
+        - os: ubuntu-latest
+          run: ulimit -n && ulimit -Hn
+
     steps:
       - uses: actions/checkout@v2
       - run: .ContinuousIntegrationScripts/installVm.sh
