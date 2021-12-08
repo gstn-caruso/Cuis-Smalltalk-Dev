@@ -14,7 +14,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         include:
         - os: ubuntu-latest
-          run: ulimit -n && ulimit -Hn
+          run: ulimit -n 99 && ulimit -Hn 99
 
     steps:
       - uses: actions/checkout@v2
