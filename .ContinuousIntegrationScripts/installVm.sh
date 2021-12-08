@@ -8,6 +8,11 @@ echo "Installing VM $VM_VERSION for $RUNNER_OS"
 
 installVmLinux() {
   sudo apt-get install pulseaudio
+  
+  cat <<END | sudo tee /etc/security/limits.d/squeak.conf
+      hard    rtprio  2
+      soft    rtprio  2
+  END
 
   VM_FILENAME="squeak.cog.spur_linux64x64_$VM_VERSION"
 
