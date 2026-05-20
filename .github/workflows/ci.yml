@@ -30,16 +30,26 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build up to the 'test' stage.
-      # The test stage runs the full SUnit suite as a RUN step inside Docker.
-      # If any test fails the build exits non-zero and this step fails.
-      # If the build completes, all tests passed.
-      - name: Build → apply updates → run tests
+      # Build up to image-updated (applies CoreUpdates, no JIT constraints).
+      - name: Build VM + apply core updates
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
             --file docker/Dockerfile \
-            --target test \
+            --target image-updated \
             --load \
-            --tag cuis-test:ci \
+            --tag cuis-image-updated:ci \
             .
+
+      # Run tests as a container with seccomp=unconfined.
+      # The Squeak JIT requires mprotect(PROT_READ|PROT_EXEC) which Docker
+      # blocks by default. seccomp=unconfined allows the syscall without
+      # granting full --privileged.
+      - name: Run test suite
+        run: |
+          docker run --rm \
+            --security-opt seccomp=unconfined \
+            -v "$PWD/.github/scripts":/workspace/.github/scripts \
+            -v "$PWD/Packages":/workspace/Packages \
+            cuis-image-updated:ci \
+            bash .github/scripts/run-tests.sh

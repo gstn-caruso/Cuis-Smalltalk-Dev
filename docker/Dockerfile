@@ -63,27 +63,18 @@ RUN cd /workspace \
       CUIS_VM_ARGUMENTS="$CUIS_VM_ARGS" \
       .github/scripts/install-updates.sh
 
-# ── Stage 3: test ─────────────────────────────────────────────────────────────
-FROM image-updated AS test
-
-COPY Packages/ /workspace/Packages/
-
-RUN cd /workspace \
- && RUNNER_OS=Linux \
-      CUIS_VM_PATH="$CUIS_VM" \
-      CUIS_VM_ARGUMENTS="$CUIS_VM_ARGS" \
-      .github/scripts/run-tests.sh
-
-# ── Stage 4: runtime ──────────────────────────────────────────────────────────
-# Minimal image to run Cuis. Built FROM test so it only exists if tests passed.
+# ── Stage 3: runtime ─────────────────────────────────────────────────────────
+# Minimal image to run Cuis.
 # Contains: updated image + VM for this arch + fonts. Nothing else.
+# Tests are run separately via 'docker run --security-opt seccomp=unconfined'
+# because the Squeak JIT requires mprotect(PROT_READ|PROT_EXEC) which is
+# blocked inside a Docker build RUN step on ARM64.
 FROM vm AS runtime
 
-# Copy only the updated image files from the image-updated stage
-COPY --from=test /workspace/CuisImage/*.image    /workspace/CuisImage/
-COPY --from=test /workspace/CuisImage/*.changes  /workspace/CuisImage/
-COPY --from=test /workspace/CuisImage/*.sources  /workspace/CuisImage/
-COPY --from=test /workspace/CuisImage/UnicodeData.txt /workspace/CuisImage/
+COPY --from=image-updated /workspace/CuisImage/*.image   /workspace/CuisImage/
+COPY --from=image-updated /workspace/CuisImage/*.changes /workspace/CuisImage/
+COPY --from=image-updated /workspace/CuisImage/*.sources /workspace/CuisImage/
+COPY --from=image-updated /workspace/CuisImage/UnicodeData.txt /workspace/CuisImage/
 
 COPY TrueTypeFonts/ /workspace/TrueTypeFonts/
 

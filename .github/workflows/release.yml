@@ -32,10 +32,29 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build the full pipeline: vm → image-updated → test → runtime.
-      # Tests run inside the 'test' stage — build fails if any test fails.
-      # The 'runtime' stage only exists if tests passed.
-      - name: Build pipeline (updates → tests → runtime)
+      # Build image-updated stage (applies CoreUpdates to the Smalltalk image)
+      - name: Build VM + apply core updates
+        run: |
+          docker buildx build \
+            --platform ${{ matrix.platform }} \
+            --file docker/Dockerfile \
+            --target image-updated \
+            --load \
+            --tag cuis-image-updated:${{ matrix.arch }} \
+            .
+
+      # Run full test suite with seccomp=unconfined (required for Squeak JIT)
+      - name: Run full test suite
+        run: |
+          docker run --rm \
+            --security-opt seccomp=unconfined \
+            -v "$PWD/.github/scripts":/workspace/.github/scripts \
+            -v "$PWD/Packages":/workspace/Packages \
+            cuis-image-updated:${{ matrix.arch }} \
+            bash .github/scripts/run-tests.sh
+
+      # Build minimal runtime image (only if tests passed above)
+      - name: Build runtime image
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
