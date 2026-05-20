@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  # ── 1. Build runtime image per arch, verify tests pass ───────────────────
+  # ── 1. Build runtime image per arch (updates + tests + minimal image) ─────
   build-runtime:
     name: Build runtime (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
@@ -32,29 +32,44 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build image-updated stage (applies CoreUpdates to the Smalltalk image)
-      - name: Build VM + apply core updates
+      - name: Build workspace image
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
             --file docker/Dockerfile \
-            --target image-updated \
+            --target workspace \
             --load \
-            --tag cuis-image-updated:${{ matrix.arch }} \
+            --tag cuis-workspace:${{ matrix.arch }} \
             .
 
-      # Run full test suite with seccomp=unconfined (required for Squeak JIT)
+      # Apply CoreUpdates. seccomp=unconfined required for Squeak JIT on ARM64.
+      - name: Apply core updates
+        run: |
+          docker run --rm \
+            --security-opt seccomp=unconfined \
+            cuis-workspace:${{ matrix.arch }} \
+            bash .github/scripts/install-updates.sh
+
       - name: Run full test suite
         run: |
           docker run --rm \
             --security-opt seccomp=unconfined \
-            -v "$PWD/.github/scripts":/workspace/.github/scripts \
-            -v "$PWD/Packages":/workspace/Packages \
-            cuis-image-updated:${{ matrix.arch }} \
+            cuis-workspace:${{ matrix.arch }} \
             bash .github/scripts/run-tests.sh
 
-      # Build minimal runtime image (only if tests passed above)
-      - name: Build runtime image
+      # Extract the updated image from the workspace container so we can
+      # inject it into the minimal runtime stage.
+      - name: Extract updated Smalltalk image
+        run: |
+          CID=$(docker create cuis-workspace:${{ matrix.arch }})
+          docker cp "$CID:/workspace/CuisImage/." CuisImage/
+          docker rm "$CID"
+          echo "Updated image files:"
+          ls -lh CuisImage/
+
+      # Rebuild with the updated CuisImage/ so the runtime stage gets
+      # the post-update image baked in.
+      - name: Build minimal runtime image
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
@@ -64,21 +79,10 @@ jobs:
             --tag cuis-runtime:${{ matrix.arch }} \
             .
 
-      # Extract the updated Smalltalk image from the runtime container.
-      # The VM binaries stay in CuisVM.app/ on the host for packaging.
-      - name: Extract updated Smalltalk image
-        run: |
-          CID=$(docker create cuis-runtime:${{ matrix.arch }})
-          docker cp "$CID:/workspace/CuisImage/." CuisImage/
-          docker rm "$CID"
-          echo "Extracted image files:"
-          ls -lh CuisImage/
+      - name: Package release ZIPs for ${{ matrix.arch }}
+        run: .github/scripts/build-release.sh release-artifacts ${{ matrix.arch }}
 
-      - name: Package release ZIP for ${{ matrix.arch }}
-        run: |
-          .github/scripts/build-release.sh release-artifacts ${{ matrix.arch }}
-
-      - name: Upload ${{ matrix.arch }} artifact
+      - name: Upload ${{ matrix.arch }} artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.arch }}

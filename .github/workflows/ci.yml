@@ -30,26 +30,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build up to image-updated (applies CoreUpdates, no JIT constraints).
-      - name: Build VM + apply core updates
+      - name: Build workspace image
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
             --file docker/Dockerfile \
-            --target image-updated \
+            --target workspace \
             --load \
-            --tag cuis-image-updated:ci \
+            --tag cuis-workspace:ci \
             .
 
-      # Run tests as a container with seccomp=unconfined.
-      # The Squeak JIT requires mprotect(PROT_READ|PROT_EXEC) which Docker
-      # blocks by default. seccomp=unconfined allows the syscall without
-      # granting full --privileged.
+      # Apply CoreUpdates to the Smalltalk image.
+      # seccomp=unconfined: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
+      - name: Apply core updates
+        run: |
+          docker run --rm \
+            --security-opt seccomp=unconfined \
+            cuis-workspace:ci \
+            bash .github/scripts/install-updates.sh
+
       - name: Run test suite
         run: |
           docker run --rm \
             --security-opt seccomp=unconfined \
-            -v "$PWD/.github/scripts":/workspace/.github/scripts \
-            -v "$PWD/Packages":/workspace/Packages \
-            cuis-image-updated:ci \
+            cuis-workspace:ci \
             bash .github/scripts/run-tests.sh
