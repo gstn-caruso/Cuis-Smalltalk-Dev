@@ -45,12 +45,11 @@ jobs:
       # Apply updates + run tests + extract updated image in one container.
       # Updates modify the image in-place; tests must run in the same container.
       # We commit the container after updates so we can extract the image.
-      # seccomp=unconfined: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
+      # --privileged: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
       - name: Apply updates, run tests, extract updated image
         run: |
           CID=$(docker create \
-            --security-opt seccomp=unconfined \
-            --security-opt apparmor=unconfined \
+            --privileged \
             cuis-workspace:${{ matrix.arch }} \
             bash -c "
               .github/scripts/install-updates.sh &&

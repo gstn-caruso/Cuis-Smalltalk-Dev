@@ -43,12 +43,13 @@ jobs:
       # Apply CoreUpdates and run tests in a single container.
       # Updates modify the image file in-place; running both in one container
       # ensures tests run against the updated image.
-      # seccomp=unconfined: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
+      # --privileged: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
+      # The ubuntu-24.04-arm runner enforces kernel restrictions beyond
+      # seccomp/apparmor; --privileged is necessary on that runner type.
       - name: Apply core updates + run tests
         run: |
           docker run --rm \
-            --security-opt seccomp=unconfined \
-            --security-opt apparmor=unconfined \
+            --privileged \
             cuis-workspace:ci \
             bash -c "
               .github/scripts/install-updates.sh &&
