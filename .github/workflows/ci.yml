@@ -7,19 +7,12 @@ on:
     branches: [master]
 
 jobs:
-  test:
-    name: Tests (${{ matrix.platform }})
-    runs-on: ${{ matrix.runner }}
+  # ── amd64: Docker pipeline ────────────────────────────────────────────────
+  # Runs the full pipeline inside Docker for reproducibility.
+  test-amd64:
+    name: Tests (linux/amd64, Docker)
+    runs-on: ubuntu-latest
     timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -33,19 +26,14 @@ jobs:
       - name: Build workspace image
         run: |
           docker buildx build \
-            --platform ${{ matrix.platform }} \
+            --platform linux/amd64 \
             --file docker/Dockerfile \
             --target workspace \
             --load \
             --tag cuis-workspace:ci \
             .
 
-      # Apply CoreUpdates and run tests in a single container.
-      # Updates modify the image file in-place; running both in one container
-      # ensures tests run against the updated image.
-      # --privileged: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
-      # The ubuntu-24.04-arm runner enforces kernel restrictions beyond
-      # seccomp/apparmor; --privileged is necessary on that runner type.
+      # Updates + tests run in one container so tests see the updated image.
       - name: Apply core updates + run tests
         run: |
           docker run --rm \
@@ -55,3 +43,26 @@ jobs:
               .github/scripts/install-updates.sh &&
               .github/scripts/run-tests.sh
             "
+
+  # ── arm64: bare-metal pipeline ────────────────────────────────────────────
+  # The ubuntu-24.04-arm runner cannot run the Squeak JIT inside Docker
+  # (mprotect restrictions). We run directly on the runner instead.
+  test-arm64:
+    name: Tests (linux/arm64, bare-metal)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up VM
+        run: .github/scripts/install-vm.sh
+
+      - name: Apply core updates
+        run: .github/scripts/install-updates.sh
+
+      - name: Run test suite
+        run: .github/scripts/run-tests.sh
