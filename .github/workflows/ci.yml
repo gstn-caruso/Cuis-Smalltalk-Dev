@@ -40,18 +40,17 @@ jobs:
             --tag cuis-workspace:ci \
             .
 
-      # Apply CoreUpdates to the Smalltalk image.
+      # Apply CoreUpdates and run tests in a single container.
+      # Updates modify the image file in-place; running both in one container
+      # ensures tests run against the updated image.
       # seccomp=unconfined: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
-      - name: Apply core updates
+      - name: Apply core updates + run tests
         run: |
           docker run --rm \
             --security-opt seccomp=unconfined \
+            --security-opt apparmor=unconfined \
             cuis-workspace:ci \
-            bash .github/scripts/install-updates.sh
-
-      - name: Run test suite
-        run: |
-          docker run --rm \
-            --security-opt seccomp=unconfined \
-            cuis-workspace:ci \
-            bash .github/scripts/run-tests.sh
+            bash -c "
+              .github/scripts/install-updates.sh &&
+              .github/scripts/run-tests.sh
+            "

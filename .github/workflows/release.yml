@@ -42,29 +42,24 @@ jobs:
             --tag cuis-workspace:${{ matrix.arch }} \
             .
 
-      # Apply CoreUpdates. seccomp=unconfined required for Squeak JIT on ARM64.
-      - name: Apply core updates
+      # Apply updates + run tests + extract updated image in one container.
+      # Updates modify the image in-place; tests must run in the same container.
+      # We commit the container after updates so we can extract the image.
+      # seccomp=unconfined: Squeak JIT requires mprotect(PROT_READ|PROT_EXEC).
+      - name: Apply updates, run tests, extract updated image
         run: |
-          docker run --rm \
+          CID=$(docker create \
             --security-opt seccomp=unconfined \
+            --security-opt apparmor=unconfined \
             cuis-workspace:${{ matrix.arch }} \
-            bash .github/scripts/install-updates.sh
-
-      - name: Run full test suite
-        run: |
-          docker run --rm \
-            --security-opt seccomp=unconfined \
-            cuis-workspace:${{ matrix.arch }} \
-            bash .github/scripts/run-tests.sh
-
-      # Extract the updated image from the workspace container so we can
-      # inject it into the minimal runtime stage.
-      - name: Extract updated Smalltalk image
-        run: |
-          CID=$(docker create cuis-workspace:${{ matrix.arch }})
+            bash -c "
+              .github/scripts/install-updates.sh &&
+              .github/scripts/run-tests.sh
+            ")
+          docker start --attach "$CID"
           docker cp "$CID:/workspace/CuisImage/." CuisImage/
           docker rm "$CID"
-          echo "Updated image files:"
+          echo "Extracted image files:"
           ls -lh CuisImage/
 
       # Rebuild with the updated CuisImage/ so the runtime stage gets
