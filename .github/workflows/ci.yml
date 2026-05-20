@@ -38,6 +38,7 @@ jobs:
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
+            --file docker/Dockerfile \
             --target test \
             --load \
             --tag cuis-test:ci \

@@ -39,6 +39,7 @@ jobs:
         run: |
           docker buildx build \
             --platform ${{ matrix.platform }} \
+            --file docker/Dockerfile \
             --target runtime \
             --load \
             --tag cuis-runtime:${{ matrix.arch }} \
