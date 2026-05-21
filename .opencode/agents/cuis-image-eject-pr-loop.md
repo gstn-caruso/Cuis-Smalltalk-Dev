@@ -35,7 +35,10 @@ Loop protocol (repeat until PR merged-ready or blocked):
      - Install MCP into the repo image (writes to `CuisImage/*.image` on the host via bind mount):
        - `docker run --rm --security-opt seccomp=unconfined -v "$PWD:/workspace" -w /workspace cuis-workspace bash -lc ".github/scripts/install-mcp.sh"`
      - Start MCP headless on port 1470:
-       - `docker run --rm --security-opt seccomp=unconfined -p 1470:1470 -v "$PWD:/workspace" -w /workspace cuis-workspace bash -lc ".github/scripts/run-mcp.sh"`
+       - Recommended (detached + named, so it can be stopped):
+         - `docker run -d --name cuis-mcp --security-opt seccomp=unconfined -p 1470:1470 -v "$PWD:/workspace" -w /workspace cuis-workspace bash -lc ".github/scripts/run-mcp.sh"`
+       - Foreground alternative:
+         - `docker run --rm --security-opt seccomp=unconfined -p 1470:1470 -v "$PWD:/workspace" -w /workspace cuis-workspace bash -lc ".github/scripts/run-mcp.sh"`
    - Alternative path (local VM): use `.github/scripts/install-mcp.sh` + `.github/scripts/run-mcp.sh` with `CUIS_VM` pointing to the VM binary.
 3. Connect via MCP, confirm the image is alive, and confirm TARGET exists.
 4. Tidy First pass:
@@ -60,6 +63,10 @@ Operational notes:
 - Never introduce Tonel or `src/` exports in this repo.
 - Never use destructive git commands.
 - If port 1470 is already in use, stop the previous MCP instance/container before starting a new one.
+- Shutdown/cleanup:
+  - Preferred: ask the image to shutdown cleanly via MCP (`cuis-mcp_shutdown`).
+  - If running in Docker detached: `docker stop cuis-mcp`.
+  - As a last resort: `docker kill cuis-mcp`.
 
 Final response must include:
 - PR URL
