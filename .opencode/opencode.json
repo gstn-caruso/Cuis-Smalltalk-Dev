@@ -18,6 +18,11 @@
       "description": "Loop headless: Tidy First + TDD, export native, open PR.",
       "agent": "cuis-image-eject-pr-loop",
       "template": "Run the loop protocol. TARGET is required and should be one of: Package:<name>, Class:<name>, Selector:<ClassName>>#selector. Prefer Docker + MCP headless. Export changes in the repo's native format (CoreUpdates .cs.st and/or Packages .pck.st). Produce a PR URL as final output."
+    },
+    "cuis-rebuild-image": {
+      "description": "Rebuild Cuis image headless (Docker) and run tests.",
+      "agent": "cuis-image-rebuild-headless",
+      "template": "Rebuild the image using the CI-like Docker pipeline. Defaults: PLATFORM=linux/amd64, ARCH=amd64, OUTPUT=updated-image. Do not commit image binaries unless explicitly requested."
     }
   }
 }
