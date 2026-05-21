@@ -2,5 +2,22 @@
   "$schema": "https://opencode.ai/config.json",
   "skills": {
     "paths": [".opencode/skills"]
+  },
+  "command": {
+    "cuis-roadmap": {
+      "description": "Bootstrap clean Cuis env, audit, propose roadmap, and produce ordered changesets.",
+      "agent": "cuis-roadmap-refactorer",
+      "template": "Bootstrap a clean Cuis environment (prefer local repo artifacts; fallback to Docker if needed). Then audit the system and propose an ordered roadmap. If the user asked to proceed, execute the first roadmap item using Tidy First + TDD (TCR only if safe) and produce an ordered CoreUpdates changeset ready to send upstream. Always report: environment commands used, what changed, verification, and what was NOT verified."
+    },
+    "cuis-council": {
+      "description": "Incremental exploration + Socratic debate to refine APIs/names and produce a prioritized roadmap.",
+      "agent": "cuis-council-orchestrator",
+      "template": "Explore the repo incrementally (one slice). Identify 1-3 candidate improvements focused on API design, naming, protocols, and maintainability. For each candidate, run a Socratic debate using subagents: cuis-change-proponent, cuis-change-critic, cuis-change-moderator. Update the prioritized roadmap. If the user asks to implement one item, delegate to cuis-tcr-tdd-driver with a crisp objective and verification plan."
+    },
+    "cuis-eject-pr": {
+      "description": "Loop headless: Tidy First + TDD, export native, open PR.",
+      "agent": "cuis-image-eject-pr-loop",
+      "template": "Run the loop protocol. TARGET is required and should be one of: Package:<name>, Class:<name>, Selector:<ClassName>>#selector. Prefer Docker + MCP headless. Export changes in the repo's native format (CoreUpdates .cs.st and/or Packages .pck.st). Produce a PR URL as final output."
+    }
   }
 }
