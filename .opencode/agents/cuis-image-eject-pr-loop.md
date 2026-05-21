@@ -28,8 +28,16 @@ Inputs:
 
 Loop protocol (repeat until PR merged-ready or blocked):
 1. Verify working tree status; do not revert unrelated user changes.
-2. Bootstrap headless Cuis via Docker (preferred) or local scripts if already configured.
-3. Connect MCP, confirm image is alive, and confirm TARGET exists.
+2. Bootstrap headless Cuis + MCP.
+   - Preferred path (Docker):
+     - Build a workspace image that includes the `cuis-mcp` package via build context:
+       - `docker buildx build --build-context cuis-mcp=https://github.com/JavierGelatti/cuis-mcp.git --target workspace --tag cuis-workspace .`
+     - Install MCP into the repo image (writes to `CuisImage/*.image` on the host via bind mount):
+       - `docker run --rm --security-opt seccomp=unconfined -v "$PWD:/workspace" -w /workspace cuis-workspace bash -lc ".github/scripts/install-mcp.sh"`
+     - Start MCP headless on port 1470:
+       - `docker run --rm --security-opt seccomp=unconfined -p 1470:1470 -v "$PWD:/workspace" -w /workspace cuis-workspace bash -lc ".github/scripts/run-mcp.sh"`
+   - Alternative path (local VM): use `.github/scripts/install-mcp.sh` + `.github/scripts/run-mcp.sh` with `CUIS_VM` pointing to the VM binary.
+3. Connect via MCP, confirm the image is alive, and confirm TARGET exists.
 4. Tidy First pass:
    - If purely structural cleanup is warranted, do it first and commit it alone.
    - Run relevant SUnit tests headless.
@@ -51,6 +59,7 @@ Operational notes:
 - Prefer using the existing `.github/scripts/*.sh` to run headless tasks.
 - Never introduce Tonel or `src/` exports in this repo.
 - Never use destructive git commands.
+- If port 1470 is already in use, stop the previous MCP instance/container before starting a new one.
 
 Final response must include:
 - PR URL
