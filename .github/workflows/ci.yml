@@ -130,9 +130,15 @@ jobs:
           GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
 
   # ── 3. Build por plataforma ───────────────────────────────────────────────
-  # Solo si se detectó una nueva versión. Corre en paralelo para amd64 y
-  # arm64 vía Docker. Produce: imagen Docker runtime (.tar.gz) y ZIPs
-  # listos para usar (macOS y linux-x86_64 solo para amd64).
+  # Solo si se detectó una nueva versión. Corre en paralelo para amd64 y arm64.
+  #
+  # amd64: Docker con --privileged (el JIT de Squeak necesita mprotect).
+  # arm64: bare-metal para instalar updates y correr tests (el JIT no puede
+  #        llamar mprotect dentro de Docker en ARM, ni con --privileged),
+  #        luego Docker solo para empaquetar la runtime image (COPY de archivos,
+  #        sin ejecutar la VM).
+  #
+  # Artefactos: runtime image (.tar.gz) para ambas arches; ZIPs solo en amd64.
 
   build:
     name: Build (${{ matrix.arch }})
@@ -160,19 +166,23 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build workspace image
+      # ── amd64: workspace Docker + VM dentro del contenedor ──────────────────
+
+      - name: Build workspace image (amd64)
+        if: matrix.arch == 'amd64'
         run: |
           docker buildx build \
-            --platform ${{ matrix.platform }} \
+            --platform linux/amd64 \
             --file docker/Dockerfile \
             --target workspace \
             --load \
-            --tag cuis-workspace:${{ matrix.arch }} \
+            --tag cuis-workspace:amd64 \
             .
 
-      - name: Test + build release image
+      - name: Test + build release image (amd64, Docker)
+        if: matrix.arch == 'amd64'
         run: |
-          CID=$(docker create --privileged cuis-workspace:${{ matrix.arch }} bash -c "
+          CID=$(docker create --privileged cuis-workspace:amd64 bash -c "
             set -euo pipefail
             cp -R CuisImage test-image
             bash .github/scripts/install-updates.sh test-image
@@ -184,8 +194,37 @@ jobs:
           rm -rf CuisImage && mkdir -p CuisImage
           docker cp "$CID:/workspace/release-image/." CuisImage/
           docker rm "$CID"
-          echo "Imagen de release:"
           ls -lh CuisImage/
+
+      # ── arm64: bare-metal para la VM, Docker solo para empaquetar ───────────
+
+      - name: Set up VM (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          set -euo pipefail
+          CUIS_VM_PATH=CuisVM.app/Contents/Linux-arm64/squeak
+          echo "PLATFORMLIBDIR=/lib/aarch64-linux-gnu" >> "$GITHUB_ENV"
+          chmod +x "$CUIS_VM_PATH"
+          "$CUIS_VM_PATH" --version
+          echo "CUIS_VM_PATH=$CUIS_VM_PATH" >> "$GITHUB_ENV"
+          echo "CUIS_VM_ARGUMENTS=-vm-sound-null -vm-display-null" >> "$GITHUB_ENV"
+
+      - name: Test + build release image (arm64, bare-metal)
+        if: matrix.arch == 'arm64'
+        run: |
+          set -euo pipefail
+          cp -R CuisImage test-image
+          CUIS_VM="$CUIS_VM_PATH" CUIS_VM_ARGS="$CUIS_VM_ARGUMENTS" \
+            bash .github/scripts/install-updates.sh test-image
+          CUIS_VM="$CUIS_VM_PATH" CUIS_VM_ARGS="$CUIS_VM_ARGUMENTS" \
+            bash .github/scripts/run-tests.sh test-image
+          cp -R CuisImage release-image
+          CUIS_VM="$CUIS_VM_PATH" CUIS_VM_ARGS="$CUIS_VM_ARGUMENTS" \
+            bash .github/scripts/install-updates.sh release-image
+          rm -rf CuisImage && mv release-image CuisImage
+          ls -lh CuisImage/
+
+      # ── ambas arches: empaquetar runtime image (COPY de archivos, sin VM) ───
 
       - name: Build runtime image
         run: |
