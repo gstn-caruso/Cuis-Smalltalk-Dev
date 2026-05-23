@@ -202,7 +202,16 @@ jobs:
         if: matrix.arch == 'arm64'
         run: |
           set -euo pipefail
-          CUIS_VM_PATH=CuisVM.app/Contents/Linux-arm64/squeak
+          # Use the stack (no-JIT) VM to avoid mprotect(PROT_EXEC) failures on
+          # Ubuntu 24.04 arm64 runners. The JIT (Cog) needs to mark anonymous
+          # pages as executable, which some kernel configs deny even bare-metal.
+          # The stack VM runs interpreted-only; performance is fine for CI.
+          OSVM_TAG="202604252110"
+          curl -fsSL \
+            "https://github.com/OpenSmalltalk/opensmalltalk-vm/releases/download/${OSVM_TAG}/squeak.stack.spur_linux64ARMv8.tar.gz" \
+            | tar -xz -C /tmp
+          ls /tmp/squeak.stack.spur_linux64ARMv8/
+          CUIS_VM_PATH=/tmp/squeak.stack.spur_linux64ARMv8/squeak
           echo "PLATFORMLIBDIR=/lib/aarch64-linux-gnu" >> "$GITHUB_ENV"
           chmod +x "$CUIS_VM_PATH"
           "$CUIS_VM_PATH" --version
