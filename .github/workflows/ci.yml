@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 env:
   # Opt into Node.js 24 for JavaScript actions ahead of the runner default
@@ -132,3 +132,36 @@ jobs:
           [[ -z "$IMAGE_FILE" ]] && { echo 'ERROR: no .image found in CuisImage/' >&2; exit 1; }
 
           "$CUIS_VM_PATH" $CUIS_VM_ARGUMENTS "CuisImage/$IMAGE_FILE" -s .github/scripts/run-tests.st
+
+  # ── semantic release ──────────────────────────────────────────────────────
+  # Corre solo en push a main (no en PRs) y solo si los dos jobs de test pasan.
+  # Analiza los commits desde el último tag, calcula el bump semver según
+  # Conventional Commits y crea el tag vX.Y.Z. Ese tag dispara release.yml.
+  release:
+    name: Semantic Release
+    needs: [test-amd64, test-arm64]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Release
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
