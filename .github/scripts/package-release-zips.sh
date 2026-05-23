@@ -18,11 +18,11 @@ CHANGES_FILE="${IMAGE_BASE}.changes"
 
 IFS=$'\n' read -r -d '' -a SOURCES_FILES < <(find "$IMAGE_DIR" -maxdepth 1 -type f -name 'Cuis*.*.sources' -print | sort && printf '\0')
 if [[ "${#SOURCES_FILES[@]}" -eq 0 ]]; then
-  echo "ERROR: no .sources found in $IMAGE_DIR/" >&2
+  echo "ERROR: no se encontró .sources en $IMAGE_DIR/" >&2
   exit 1
 fi
 if [[ "${#SOURCES_FILES[@]}" -gt 1 ]]; then
-  echo "ERROR: multiple .sources files found in $IMAGE_DIR/:" >&2
+  echo "ERROR: múltiples archivos .sources en $IMAGE_DIR/:" >&2
   printf '  %s\n' "${SOURCES_FILES[@]}" >&2
   exit 1
 fi
@@ -33,13 +33,13 @@ if [[ -d "$MCP_DIR/skills" ]]; then
   HAS_MCP=true
 fi
 
-echo "Image   : $IMAGE_DIR/$IMAGE_FILE"
+echo "Imagen  : $IMAGE_DIR/$IMAGE_FILE"
 echo "Sources : $IMAGE_DIR/$SOURCES_FILE"
 echo "Arch    : $ARCH_FILTER"
 if [[ "$HAS_MCP" == true ]]; then
   echo "MCP     : $MCP_DIR"
 else
-  echo "MCP     : not bundled"
+  echo "MCP     : no incluido"
 fi
 echo ""
 
@@ -55,7 +55,7 @@ package_platform() {
   DEST="$STAGING/Cuis-${PLATFORM}"
   mkdir -p "$DEST/CuisImage" "$DEST/CuisVM.app/Contents" "$DEST/TrueTypeFonts"
 
-  echo "Packaging $PLATFORM ..."
+  echo "Empaquetando $PLATFORM ..."
 
   cp "$IMAGE_DIR/$IMAGE_FILE" "$DEST/CuisImage/"
   cp "$IMAGE_DIR/$CHANGES_FILE" "$DEST/CuisImage/" 2>/dev/null || true
@@ -91,7 +91,7 @@ package_platform() {
 
 case "$ARCH_FILTER" in
   arm64)
-    echo "Skipping ZIP packaging for arm64. This release only ships macOS and linux-x86_64 ZIPs." 
+    echo "Se omite el empaquetado ZIP para arm64. El release incluye solo ZIPs para macOS y linux-x86_64."
     ;;
   amd64|all)
     package_platform "linux-x86_64" \
@@ -103,11 +103,11 @@ case "$ARCH_FILTER" in
       "RunCuisOnMac.sh" "RunCuisOnFinder.command" "unquarantine.sh"
     ;;
   *)
-    echo "ERROR: unknown arch filter '$ARCH_FILTER'. Use: amd64, arm64, all" >&2
+    echo "ERROR: arch desconocida '$ARCH_FILTER'. Valores válidos: amd64, arm64, all" >&2
     exit 1
     ;;
 esac
 
 echo ""
-echo "Artifacts:"
+echo "Artefactos:"
 ls -lh "$OUTPUT_DIR/"

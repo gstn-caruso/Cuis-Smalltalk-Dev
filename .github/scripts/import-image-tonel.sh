@@ -10,7 +10,7 @@ CUIS_VM_BIN="${CUIS_VM:-${CUIS_VM_PATH:-}}"
 CUIS_VM_OPTIONS="${CUIS_VM_ARGS:--headless}"
 
 if [[ -z "$CUIS_VM_BIN" ]]; then
-  echo "ERROR: set CUIS_VM or CUIS_VM_PATH before importing Tonel source" >&2
+  echo "ERROR: definí CUIS_VM o CUIS_VM_PATH antes de importar Tonel" >&2
   exit 1
 fi
 

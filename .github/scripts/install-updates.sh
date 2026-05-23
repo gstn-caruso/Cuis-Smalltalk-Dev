@@ -9,7 +9,7 @@ CUIS_VM_BIN="${CUIS_VM:-${CUIS_VM_PATH:-}}"
 CUIS_VM_OPTIONS="${CUIS_VM_ARGS:-${CUIS_VM_ARGUMENTS:-}}"
 
 if [[ -z "$CUIS_VM_BIN" ]]; then
-  echo "ERROR: set CUIS_VM or CUIS_VM_PATH before installing updates" >&2
+  echo "ERROR: definí CUIS_VM o CUIS_VM_PATH antes de instalar updates" >&2
   exit 1
 fi
 
