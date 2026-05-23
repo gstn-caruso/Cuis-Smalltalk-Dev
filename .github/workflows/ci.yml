@@ -7,26 +7,23 @@ on:
     branches: [main]
 
 env:
-  # Opt into Node.js 24 for JavaScript actions ahead of the runner default
-  # switch (June 2026). Helps catch incompatibilities early.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ── amd64: Docker pipeline ────────────────────────────────────────────────
-  # Runs the full pipeline inside Docker for reproducibility.
+
+  # ── 1. Tests ──────────────────────────────────────────────────────────────
+  # Corren en cada push y en cada PR.
+
   test-amd64:
     name: Tests (linux/amd64, Docker)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
       - name: Build workspace image
         run: |
@@ -38,130 +35,250 @@ jobs:
             --tag cuis-workspace:ci \
             .
 
-      # Updates + tests run in one container so tests see the updated image.
       - name: Apply core updates + run tests
         run: |
-          docker run --rm \
-            --privileged \
-            cuis-workspace:ci \
-            bash -c "
-              set -euo pipefail
+          docker run --rm --privileged cuis-workspace:ci bash -c "
+            set -euo pipefail
+            IMAGE_FILE=\$(ls CuisImage/ | grep -E 'Cuis[0-9]+\.[0-9]+-[0-9]+\.image' | head -1)
+            [[ -z \"\$IMAGE_FILE\" ]] && { echo 'ERROR: no .image en CuisImage/' >&2; exit 1; }
+            SCRIPT=\"Utilities classPool at: #AuthorName put: 'GitHubActions'.
+            Utilities classPool at: #AuthorInitials put: 'GHA'.
+            ChangeSet installNewUpdates.
+            Smalltalk saveAndQuit.\"
+            \"\$CUIS_VM\" \$CUIS_VM_ARGS CuisImage/\"\$IMAGE_FILE\" -d \"\$SCRIPT\"
+            \"\$CUIS_VM\" \$CUIS_VM_ARGS CuisImage/\"\$IMAGE_FILE\" -s .github/scripts/run-tests.st
+          "
 
-              IMAGE_FILE=\$(ls CuisImage/ | grep -E 'Cuis[0-9]+\.[0-9]+-[0-9]+\.image' | head -1)
-              [[ -z \"\$IMAGE_FILE\" ]] && { echo 'ERROR: no .image found in CuisImage/' >&2; exit 1; }
-
-              INSTALL_UPDATES_SCRIPT=\"\\
-                Utilities classPool at: #AuthorName put: 'GitHubActions'.
-                Utilities classPool at: #AuthorInitials put: 'GHA'.
-                ChangeSet installNewUpdates.
-                Smalltalk saveAndQuit.\\
-              \"
-
-              \"\$CUIS_VM\" \$CUIS_VM_ARGS CuisImage/\"\$IMAGE_FILE\" -d \"\$INSTALL_UPDATES_SCRIPT\"
-
-              \"\$CUIS_VM\" \$CUIS_VM_ARGS CuisImage/\"\$IMAGE_FILE\" -s .github/scripts/run-tests.st
-            "
-
-  # ── arm64: bare-metal pipeline ────────────────────────────────────────────
-  # The ubuntu-24.04-arm runner cannot run the Squeak JIT inside Docker
-  # (mprotect restrictions). We run directly on the runner instead.
   test-arm64:
     name: Tests (linux/arm64, bare-metal)
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Set up VM
         run: |
           set -euo pipefail
-
-          echo "Setting up VM for $RUNNER_OS ($(uname -m))"
-
           ARCH=$(uname -m)
           case "$ARCH" in
-            x86_64)
-              CUIS_VM_PATH=CuisVM.app/Contents/Linux-x86_64/squeak
-              ;;
-            aarch64|arm64)
+            x86_64)   CUIS_VM_PATH=CuisVM.app/Contents/Linux-x86_64/squeak ;;
+            aarch64)
               CUIS_VM_PATH=CuisVM.app/Contents/Linux-arm64/squeak
-              # The squeak wrapper script uses ldd to detect the libc path.
-              # On Ubuntu 24.04 ARM64 the ldd output format differs from what
-              # the script expects. We export PLATFORMLIBDIR to skip ldd detection.
               echo "PLATFORMLIBDIR=/lib/aarch64-linux-gnu" >> "$GITHUB_ENV"
               ;;
-            *)
-              echo "Unsupported Linux architecture: $ARCH" >&2
-              exit 1
-              ;;
+            *) echo "Arquitectura no soportada: $ARCH" >&2; exit 1 ;;
           esac
-
-          CUIS_VM_ARGUMENTS="-vm-sound-null -vm-display-null"
           chmod +x "$CUIS_VM_PATH"
           "$CUIS_VM_PATH" --version
-
           echo "CUIS_VM_PATH=$CUIS_VM_PATH" >> "$GITHUB_ENV"
-          echo "CUIS_VM_ARGUMENTS=$CUIS_VM_ARGUMENTS" >> "$GITHUB_ENV"
+          echo "CUIS_VM_ARGUMENTS=-vm-sound-null -vm-display-null" >> "$GITHUB_ENV"
 
       - name: Apply core updates
         run: |
           set -euo pipefail
-
           IMAGE_FILE=$(ls CuisImage/ | grep -E 'Cuis[0-9]+\.[0-9]+-[0-9]+\.image' | head -1)
-          [[ -z "$IMAGE_FILE" ]] && { echo 'ERROR: no .image found in CuisImage/' >&2; exit 1; }
-
-          INSTALL_UPDATES_SCRIPT="\
-            Utilities classPool at: #AuthorName put: 'GitHubActions'.
-            Utilities classPool at: #AuthorInitials put: 'GHA'.
-            ChangeSet installNewUpdates.\
-            Smalltalk saveAndQuit.\
-          "
-
-          # $CUIS_VM_ARGUMENTS must not be quoted so each flag is a separate arg.
-          "$CUIS_VM_PATH" $CUIS_VM_ARGUMENTS "CuisImage/$IMAGE_FILE" -d "$INSTALL_UPDATES_SCRIPT"
+          [[ -z "$IMAGE_FILE" ]] && { echo 'ERROR: no .image en CuisImage/' >&2; exit 1; }
+          SCRIPT="Utilities classPool at: #AuthorName put: 'GitHubActions'.
+          Utilities classPool at: #AuthorInitials put: 'GHA'.
+          ChangeSet installNewUpdates.
+          Smalltalk saveAndQuit."
+          "$CUIS_VM_PATH" $CUIS_VM_ARGUMENTS "CuisImage/$IMAGE_FILE" -d "$SCRIPT"
 
       - name: Run test suite
         run: |
           set -euo pipefail
-
           IMAGE_FILE=$(ls CuisImage/ | grep -E 'Cuis[0-9]+\.[0-9]+-[0-9]+\.image' | head -1)
-          [[ -z "$IMAGE_FILE" ]] && { echo 'ERROR: no .image found in CuisImage/' >&2; exit 1; }
-
+          [[ -z "$IMAGE_FILE" ]] && { echo 'ERROR: no .image en CuisImage/' >&2; exit 1; }
           "$CUIS_VM_PATH" $CUIS_VM_ARGUMENTS "CuisImage/$IMAGE_FILE" -s .github/scripts/run-tests.st
 
-  # ── semantic release ──────────────────────────────────────────────────────
-  # Corre solo en push a main (no en PRs) y solo si los dos jobs de test pasan.
-  # Analiza los commits desde el último tag, calcula el bump semver según
-  # Conventional Commits y crea el tag vX.Y.Z. Ese tag dispara release.yml.
-  release:
-    name: Semantic Release
+  # ── 2. Detectar versión ───────────────────────────────────────────────────
+  # Solo en push a main, después de que pasan los dos jobs de tests.
+  # Analiza los commits desde el último tag con Conventional Commits y
+  # determina el bump semver. Si hay nueva versión, crea el tag git y
+  # expone la versión como output para los jobs siguientes.
+
+  version:
+    name: Detectar versión
     needs: [test-amd64, test-arm64]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+    outputs:
+      published: ${{ steps.semantic.outputs.new_release_published }}
+      version:   ${{ steps.semantic.outputs.new_release_version }}
+      tag:       ${{ steps.semantic.outputs.new_release_git_tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Release
-        run: npx semantic-release
+      - uses: cycjimmy/semantic-release-action@v4
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
+
+  # ── 3. Build por plataforma ───────────────────────────────────────────────
+  # Solo si se detectó una nueva versión. Corre en paralelo para amd64 y
+  # arm64 vía Docker. Produce: imagen Docker runtime (.tar.gz) y ZIPs
+  # listos para usar (macOS y linux-x86_64 solo para amd64).
+
+  build:
+    name: Build (${{ matrix.arch }})
+    needs: [version]
+    if: needs.version.outputs.published == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build workspace image
+        run: |
+          docker buildx build \
+            --platform ${{ matrix.platform }} \
+            --file docker/Dockerfile \
+            --target workspace \
+            --load \
+            --tag cuis-workspace:${{ matrix.arch }} \
+            .
+
+      - name: Test + build release image
+        run: |
+          CID=$(docker create --privileged cuis-workspace:${{ matrix.arch }} bash -c "
+            set -euo pipefail
+            cp -R CuisImage test-image
+            bash .github/scripts/install-updates.sh test-image
+            bash .github/scripts/run-tests.sh test-image
+            cp -R CuisImage release-image
+            bash .github/scripts/install-updates.sh release-image
+          ")
+          docker start --attach "$CID"
+          rm -rf CuisImage && mkdir -p CuisImage
+          docker cp "$CID:/workspace/release-image/." CuisImage/
+          docker rm "$CID"
+          echo "Imagen de release:"
+          ls -lh CuisImage/
+
+      - name: Build runtime image
+        run: |
+          docker buildx build \
+            --platform ${{ matrix.platform }} \
+            --file docker/Dockerfile \
+            --target runtime \
+            --load \
+            --tag cuis-headless:${{ needs.version.outputs.tag }}-${{ matrix.arch }} \
+            .
+
+      - name: Export runtime image
+        run: |
+          mkdir -p release-artifacts
+          docker save "cuis-headless:${{ needs.version.outputs.tag }}-${{ matrix.arch }}" \
+            | gzip > "release-artifacts/cuis-headless-${{ needs.version.outputs.tag }}-linux-${{ matrix.arch }}.tar.gz"
+          ls -lh release-artifacts/
+
+      - name: Package ZIPs
+        run: bash .github/scripts/package-release-zips.sh "${{ matrix.arch }}" CuisImage release-artifacts cuis-mcp
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: |
+            release-artifacts/*.zip
+            release-artifacts/*.tar.gz
+          retention-days: 7
+
+  # ── 4. Publicar GitHub Release ────────────────────────────────────────────
+  # Solo si se detectó una nueva versión. Descarga los artefactos de ambas
+  # plataformas y publica el GitHub Release con notas generadas desde el
+  # historial de commits.
+
+  publish:
+    name: Publicar GitHub Release
+    needs: [version, build]
+    if: needs.version.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-amd64
+          path: release-artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-arm64
+          path: release-artifacts
+
+      - name: Listar artefactos
+        run: ls -lh release-artifacts/
+
+      - name: Generar release notes
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.version.outputs.tag }}"
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | grep -Fxv "$TAG" | head -1 || true)
+          RANGE="${PREVIOUS_TAG:+$PREVIOUS_TAG..}${{ github.sha }}"
+          {
+            echo "## Cuis Smalltalk $TAG"
+            echo
+            echo "Paquetes listos para usar. Descargá el ZIP de tu plataforma, descomprimilo y ejecutá el script — sin instalación."
+            echo
+            echo "| Plataforma | ZIP | Comando |"
+            echo "|---|---|---|"
+            echo "| macOS | \`*-macos.zip\` | \`RunCuisOnMac.sh\` o doble clic en \`RunCuisOnFinder.command\` |"
+            echo "| Linux x86_64 | \`*-linux-x86_64.zip\` | \`RunCuisOnLinux.sh\` |"
+            echo
+            echo "> **macOS + ZIP:** ejecutá \`./unquarantine.sh\` antes de lanzar."
+            echo
+            echo "### Docker"
+            echo "- \`cuis-headless-${TAG}-linux-amd64.tar.gz\`"
+            echo "- \`cuis-headless-${TAG}-linux-arm64.tar.gz\`"
+            echo "- Cargar con \`docker load < asset.tar.gz\`"
+            echo
+            echo "### Commits"
+            git log --no-merges --pretty='- `%h` %s' "$RANGE"
+          } > release-notes.md
+
+      - name: Publicar en GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: "Cuis Smalltalk ${{ needs.version.outputs.tag }}"
+          body_path: release-notes.md
+          files: |
+            release-artifacts/*.zip
+            release-artifacts/*.tar.gz
+          fail_on_unmatched_files: true
