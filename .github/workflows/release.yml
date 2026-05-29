@@ -1,0 +1,278 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) Construir la imagen UNA sola vez.
+  #    La imagen es platform-neutral: el mismo .image sirve para macOS y Linux.
+  #    Se construye con el VM Linux x86_64 del repo en modo headless
+  #    (-vm-display-null): en headless el VM no stepea la UI, así el script -s
+  #    corre sincrónico y no se dispara ningún diálogo modal de arranque.
+  # ---------------------------------------------------------------------------
+  build-image:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(ls CoreUpdates/*.cs.st | sed 's|CoreUpdates/||; s|-.*||' | sort -n | tail -1)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}"
+
+      - name: Build image (headless, applies CoreUpdates)
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          VM="$PWD/CuisVM.app/Contents/Linux-x86_64/squeak"
+          chmod +x "$VM" "$PWD"/CuisVM.app/Contents/Linux-x86_64/lib/squeak/*/squeak
+
+          SRC=$(ls CuisImage | grep -E 'Cuis7\.7-[0-9]+\.image')
+          # Renombramos a la versión final ANTES de construir, para que el
+          # basename quede consistente (Cuis deriva el .changes del nombre del
+          # .image; renombrar después confunde el chequeo de "changes not clean").
+          cp "CuisImage/${SRC}" "CuisImage/Cuis7.7-${VERSION}.image"
+          cp "CuisImage/${SRC%.image}.changes" "CuisImage/Cuis7.7-${VERSION}.changes"
+
+          cat > /tmp/build.st <<'SMALLTALK'
+          Utilities classPool at: #AuthorName put: 'Github CI'.
+          Utilities classPool at: #AuthorInitials put: 'CI'.
+
+          "Aplicamos los updates nuevos sin pasar por installNewUpdates,
+           que termina con un 'inform:' modal cuando hay paquetes desactualizados.
+           saveAndQuit deja el .changes limpio (snapshot al final, en
+           LastQuitLogPosition), así la imagen del release abre sin warnings.
+           No tocamos Preferences: la imagen queda fiel al Cuis original."
+          ChangeSet newUpdates: DirectoryEntry coreUpdatesDirectory do: [ :each |
+              ChangeSet install: each ].
+
+          Smalltalk saveAndQuit.
+          SMALLTALK
+
+          "$VM" -vm-display-null -vm-sound-null \
+            "CuisImage/Cuis7.7-${VERSION}.image" -s /tmp/build.st
+
+      - name: Debug log on failure
+        if: failure()
+        run: find . /tmp -name 'CuisDebug-*.log' 2>/dev/null -exec sh -c 'echo "=== {} ==="; cat "{}"' \;
+
+      - name: Upload built image
+        uses: actions/upload-artifact@v7
+        with:
+          name: built-image
+          path: |
+            CuisImage/Cuis7.7-${{ steps.version.outputs.version }}.image
+            CuisImage/Cuis7.7-${{ steps.version.outputs.version }}.changes
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 1b) Correr la suite completa sobre la imagen ya construida.
+  #     Descarga el artifact de build-image, instala BaseImageTests.pck.st y
+  #     corre TODOS los TestCase no abstractos. Sale con código 1 si hay
+  #     failures o errors, lo que bloquea package y release aguas abajo.
+  #     Corre headless sobre la copia descargada (filear los tests ensucia el
+  #     .changes, pero ese artifact es descartable y no se shipea).
+  # ---------------------------------------------------------------------------
+  test:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download built image
+        uses: actions/download-artifact@v8
+        with:
+          name: built-image
+          path: built
+
+      - name: Run tests (headless)
+        run: |
+          VERSION=${{ needs.build-image.outputs.version }}
+          VM="$PWD/CuisVM.app/Contents/Linux-x86_64/squeak"
+          chmod +x "$VM" "$PWD"/CuisVM.app/Contents/Linux-x86_64/lib/squeak/*/squeak
+
+          cp "built/Cuis7.7-${VERSION}.image"   /tmp/test.image
+          cp "built/Cuis7.7-${VERSION}.changes" /tmp/test.changes
+          cp CuisImage/Cuis7.6.sources CuisImage/UnicodeData.txt /tmp/
+
+          cat > /tmp/runTests.st <<'SMALLTALK'
+          | testSuite result exitCode |
+          Utilities classPool at: #AuthorName put: 'Github CI'.
+          Utilities classPool at: #AuthorInitials put: 'CI'.
+
+          CodePackageFile installPackage: DirectoryEntry currentDirectory // 'Packages/BaseImageTests.pck.st'.
+          ChangeSet fileIn: DirectoryEntry currentDirectory // '.github/scripts/TestResultConsolePrinter.st'.
+
+          testSuite := TestSuite new.
+          (TestCase allSubclasses reject: [:tc | tc isAbstract])
+              do: [:tc | tc addToSuiteFromSelectors: testSuite].
+
+          result := testSuite run.
+          result printReport.
+
+          exitCode := (result hasFailures or: [result hasErrors]) ifTrue: [1] ifFalse: [0].
+          Smalltalk quitPrimitive: exitCode.
+          SMALLTALK
+
+          "$VM" -vm-display-null -vm-sound-null \
+            /tmp/test.image -s /tmp/runTests.st
+
+      - name: Debug log on failure
+        if: failure()
+        run: find . /tmp -name 'CuisDebug-*.log' 2>/dev/null -exec sh -c 'echo "=== {} ==="; cat "{}"' \;
+
+  # ---------------------------------------------------------------------------
+  # 2) Empaquetar por plataforma. Cada bundle lleva SOLO el binario correcto.
+  #    No corre el VM: solo copia archivos, así puede correr todo en x64.
+  # ---------------------------------------------------------------------------
+  package:
+    needs: [build-image, test]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: macOS
+            launchers: "RunCuisOnMac.sh RunCuisOnFinder.command"
+          - target: Linux-x86_64
+            launchers: "RunCuisOnLinux.sh"
+          - target: Linux-arm64
+            launchers: "RunCuisOnLinux.sh"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download built image
+        uses: actions/download-artifact@v8
+        with:
+          name: built-image
+          path: built
+
+      - name: Assemble bundle
+        run: |
+          VERSION=${{ needs.build-image.outputs.version }}
+          TARGET=${{ matrix.target }}
+          BUNDLE="Cuis7.7-${VERSION}-${TARGET}"
+
+          mkdir -p "${BUNDLE}/CuisImage" "${BUNDLE}/CuisVM.app/Contents"
+
+          cp "built/Cuis7.7-${VERSION}.image"   "${BUNDLE}/CuisImage/"
+          cp "built/Cuis7.7-${VERSION}.changes" "${BUNDLE}/CuisImage/"
+          cp CuisImage/Cuis7.6.sources CuisImage/UnicodeData.txt "${BUNDLE}/CuisImage/"
+
+          cp -a CuisVM.app/Contents/Info.plist "${BUNDLE}/CuisVM.app/Contents/"
+          case "$TARGET" in
+            macOS)
+              cp -a CuisVM.app/Contents/MacOS     "${BUNDLE}/CuisVM.app/Contents/"
+              cp -a CuisVM.app/Contents/Resources "${BUNDLE}/CuisVM.app/Contents/"
+              ;;
+            Linux-x86_64|Linux-arm64)
+              cp -a "CuisVM.app/Contents/${TARGET}" "${BUNDLE}/CuisVM.app/Contents/"
+              ;;
+          esac
+
+          cp -r TrueTypeFonts "${BUNDLE}/"
+          for l in ${{ matrix.launchers }}; do cp ".github/scripts/$l" "${BUNDLE}/"; done
+          chmod +x "${BUNDLE}"/RunCuisOn* 2>/dev/null || true
+
+          zip -ry "${BUNDLE}.zip" "${BUNDLE}/"
+          ls -la "${BUNDLE}.zip"
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-${{ matrix.target }}
+          path: Cuis7.7-*-${{ matrix.target }}.zip
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 2b) Firmar ad-hoc el bundle de macOS (sin notarización, sin secrets).
+  #     El job package corre en Linux y no puede firmar el .app: el linker deja
+  #     solo el binario interno firmado, no el bundle, y en Apple Silicon eso da
+  #     error -47 al abrir. Acá, en un runner macOS, le ponemos una firma ad-hoc
+  #     real a todo el .app. NO notariza: el usuario igual tiene que sacar la
+  #     cuarentena la primera vez (ver release notes), pero ya no aparece el -47.
+  # ---------------------------------------------------------------------------
+  sign-macos:
+    needs: [build-image, package]
+    runs-on: macos-latest
+    steps:
+      - name: Download macOS bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: bundle-macOS
+          path: dist
+
+      - name: Ad-hoc sign CuisVM.app
+        run: |
+          VERSION=${{ needs.build-image.outputs.version }}
+          BUNDLE="Cuis7.7-${VERSION}-macOS"
+          unzip -q "dist/${BUNDLE}.zip"
+
+          codesign --force --deep --sign - "${BUNDLE}/CuisVM.app"
+          codesign --verify --verbose "${BUNDLE}/CuisVM.app"
+
+          # Re-empaquetar con la .app ya firmada, misma estructura que package.
+          rm -f "${BUNDLE}.zip"
+          zip -ry "${BUNDLE}.zip" "${BUNDLE}/"
+
+      - name: Re-upload signed macOS bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-macOS
+          path: Cuis7.7-*-macOS.zip
+          overwrite: true
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 3) Publicar el release con los 3 zips.
+  # ---------------------------------------------------------------------------
+  release:
+    needs: [build-image, package, sign-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all bundles
+        uses: actions/download-artifact@v8
+        with:
+          pattern: bundle-*
+          path: dist
+          merge-multiple: true
+
+      - name: Delete existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${{ needs.build-image.outputs.version }}
+          gh release delete "v${VERSION}" --yes --cleanup-tag \
+            --repo "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: "v${{ needs.build-image.outputs.version }}"
+          name: "Cuis 7.7 #${{ needs.build-image.outputs.version }}"
+          files: dist/*.zip
+          body: |
+            Cuis 7.7, latest update #${{ needs.build-image.outputs.version }}
+
+            Imagen con las CoreUpdates aplicadas. Cada bundle trae el binario
+            correcto de su plataforma.
+
+            | Plataforma | Archivo | Arranque |
+            |------------|---------|----------|
+            | macOS (universal arm64+x64) | `Cuis7.7-${{ needs.build-image.outputs.version }}-macOS.zip` | `./RunCuisOnMac.sh` |
+            | Linux x86_64 | `Cuis7.7-${{ needs.build-image.outputs.version }}-Linux-x86_64.zip` | `./RunCuisOnLinux.sh` |
+            | Linux arm64 | `Cuis7.7-${{ needs.build-image.outputs.version }}-Linux-arm64.zip` | `./RunCuisOnLinux.sh` |
+
+            **macOS — primera vez:** si bajaste el zip por el navegador, macOS lo pone
+            en cuarentena y Gatekeeper bloquea la VM (no está notarizada). Sacale la
+            cuarentena una vez tras descomprimir:
+
+            ```bash
+            xattr -dr com.apple.quarantine Cuis7.7-${{ needs.build-image.outputs.version }}-macOS
+            ```
