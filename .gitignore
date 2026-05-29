@@ -3,6 +3,9 @@ UserChanges/
 *.changes
 !CuisImage/*.changes
 
+# Artefacto generado por el export Tonel (image name + timestamp + conteos)
+manifest.txt
+
 # El VM ya no se versiona: el CI lo baja de OpenSmalltalk y para dev local
 # usás tu propia VM. Ver README.
 CuisVM.app/
