@@ -84,6 +84,11 @@ qSmalltalk stands on the shoulders of [Cuis Smalltalk](https://cuis-smalltalk.or
 Juan Vuletich and contributors, which itself descends from Squeak and the original
 Smalltalk-80 at Xerox PARC. We are grateful for all of it — and we diverge with respect.
 
+Special thanks to:
+
+- **Facundo Gelatti** — for the MCP connector.
+- **Máximo Prieto** — for building a new paradigm that made the birth of this fork possible.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
