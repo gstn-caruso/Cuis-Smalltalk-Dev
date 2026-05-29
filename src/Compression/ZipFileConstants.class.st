@@ -1,0 +1,60 @@
+Class {
+	#name : 'ZipFileConstants',
+	#superclass : 'SharedPool',
+	#classVars : [
+		'CentralDirectoryFileHeaderSignature',
+		'CompressionDeflated',
+		'CompressionLevelDefault',
+		'CompressionLevelNone',
+		'CompressionStored',
+		'DataDescriptorLength',
+		'DefaultDirectoryPermissions',
+		'DefaultFilePermissions',
+		'DeflatingCompressionFast',
+		'DeflatingCompressionMaximum',
+		'DeflatingCompressionNormal',
+		'DeflatingCompressionSuperFast',
+		'DirectoryAttrib',
+		'EndOfCentralDirectorySignature',
+		'FaMsdos',
+		'FaUnix',
+		'FileAttrib',
+		'IfaBinaryFile',
+		'IfaTextFile',
+		'LocalFileHeaderSignature'
+	],
+	#category : 'Compression-Archives',
+	#package : 'Compression',
+	#tag : 'Archives'
+}
+
+{ #category : 'pool initialization' }
+ZipFileConstants class >> initialize [
+	"ZipFileConstants initialize"
+	FaMsdos		:= 0.
+	FaUnix 		:= 3.
+	DeflatingCompressionNormal		:= 0.
+	DeflatingCompressionMaximum	:= 2.
+	DeflatingCompressionFast		:= 4.
+	DeflatingCompressionSuperFast	:= 6.
+	CompressionStored				:= 0.
+	CompressionDeflated				:= 8.
+	CompressionLevelNone			:= 0.
+	CompressionLevelDefault			:= 6.
+	IfaTextFile						:= 1.
+	IfaBinaryFile					:= 0.
+	CentralDirectoryFileHeaderSignature	:= 0.
+	LocalFileHeaderSignature 			:= 0.
+	EndOfCentralDirectorySignature 		:= 0.
+	DataDescriptorLength 				:= 12.
+
+	"Unix permission bits"
+	DefaultDirectoryPermissions		:= 8r040755.
+	DefaultFilePermissions			:= 8r0100666.
+	DirectoryAttrib 					:= 8r040000.
+	FileAttrib 						:= 8r0100000.
+
+	CentralDirectoryFileHeaderSignature := ByteArray with: 16r50 with: 16r4B with: 16r01 with: 16r02.
+	LocalFileHeaderSignature := ByteArray with: 16r50 with: 16r4B with: 16r03 with: 16r04.
+	EndOfCentralDirectorySignature := ByteArray with: 16r50 with: 16r4B with: 16r05 with: 16r06.
+]
