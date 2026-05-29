@@ -2,3 +2,7 @@
 UserChanges/
 *.changes
 !CuisImage/*.changes
+
+# El VM ya no se versiona: el CI lo baja de OpenSmalltalk y para dev local
+# usás tu propia VM. Ver README.
+CuisVM.app/

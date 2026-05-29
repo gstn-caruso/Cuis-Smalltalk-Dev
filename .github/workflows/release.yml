@@ -4,13 +4,21 @@ on:
   push:
     branches: [main]
 
+# Versión del VM de OpenSmalltalk que se baja para construir y empaquetar.
+# Es la misma build que veníamos shippeando vendoreada (el dir de plugins era
+# 7.0-202603271636-64bit). El VM ya no vive en el repo: se baja del release
+# oficial de OpenSmalltalk. Bumpear esta versión es un cambio aparte.
+env:
+  VM_RELEASE: "202603271636"
+  VM_BASE_URL: "https://github.com/OpenSmalltalk/opensmalltalk-vm/releases/download"
+
 jobs:
   # ---------------------------------------------------------------------------
   # 1) Construir la imagen UNA sola vez.
   #    La imagen es platform-neutral: el mismo .image sirve para macOS y Linux.
-  #    Se construye con el VM Linux x86_64 del repo en modo headless
-  #    (-vm-display-null): en headless el VM no stepea la UI, así el script -s
-  #    corre sincrónico y no se dispara ningún diálogo modal de arranque.
+  #    Se construye con el VM Linux x86_64 (bajado de OpenSmalltalk) en modo
+  #    headless (-vm-display-null): en headless el VM no stepea la UI, así el
+  #    script -s corre sincrónico y no se dispara ningún diálogo modal de arranque.
   # ---------------------------------------------------------------------------
   build-image:
     runs-on: ubuntu-latest
@@ -26,11 +34,18 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}"
 
+      - name: Download VM (Linux x64)
+        run: |
+          curl -fsSL -o /tmp/vm.tar.gz \
+            "${VM_BASE_URL}/${VM_RELEASE}/squeak.cog.spur_linux64x64.tar.gz"
+          mkdir -p /tmp/vm && tar xzf /tmp/vm.tar.gz -C /tmp/vm
+          VM=$(find /tmp/vm -maxdepth 2 -type f -name squeak | head -1)
+          chmod +x "$VM"
+          echo "VM=${VM}" >> "$GITHUB_ENV"
+
       - name: Build image (headless, applies CoreUpdates)
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          VM="$PWD/CuisVM.app/Contents/Linux-x86_64/squeak"
-          chmod +x "$VM" "$PWD"/CuisVM.app/Contents/Linux-x86_64/lib/squeak/*/squeak
 
           SRC=$(ls CuisImage | grep -E 'Cuis7\.7-[0-9]+\.image')
           # Renombramos a la versión final ANTES de construir, para que el
@@ -46,8 +61,7 @@ jobs:
           "Aplicamos los updates nuevos sin pasar por installNewUpdates,
            que termina con un 'inform:' modal cuando hay paquetes desactualizados.
            saveAndQuit deja el .changes limpio (snapshot al final, en
-           LastQuitLogPosition), así la imagen del release abre sin warnings.
-           No tocamos Preferences: la imagen queda fiel al Cuis original."
+           LastQuitLogPosition), así la imagen del release abre sin warnings."
           ChangeSet newUpdates: DirectoryEntry coreUpdatesDirectory do: [ :each |
               ChangeSet install: each ].
 
@@ -72,11 +86,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 1b) Correr la suite completa sobre la imagen ya construida.
-  #     Descarga el artifact de build-image, instala BaseImageTests.pck.st y
-  #     corre TODOS los TestCase no abstractos. Sale con código 1 si hay
-  #     failures o errors, lo que bloquea package y release aguas abajo.
-  #     Corre headless sobre la copia descargada (filear los tests ensucia el
-  #     .changes, pero ese artifact es descartable y no se shipea).
+  #     Baja el VM Linux x64, instala BaseImageTests.pck.st y corre TODOS los
+  #     TestCase no abstractos. Sale con código 1 si hay failures o errors, lo
+  #     que bloquea package y release aguas abajo.
   # ---------------------------------------------------------------------------
   test:
     needs: build-image
@@ -90,11 +102,18 @@ jobs:
           name: built-image
           path: built
 
+      - name: Download VM (Linux x64)
+        run: |
+          curl -fsSL -o /tmp/vm.tar.gz \
+            "${VM_BASE_URL}/${VM_RELEASE}/squeak.cog.spur_linux64x64.tar.gz"
+          mkdir -p /tmp/vm && tar xzf /tmp/vm.tar.gz -C /tmp/vm
+          VM=$(find /tmp/vm -maxdepth 2 -type f -name squeak | head -1)
+          chmod +x "$VM"
+          echo "VM=${VM}" >> "$GITHUB_ENV"
+
       - name: Run tests (headless)
         run: |
           VERSION=${{ needs.build-image.outputs.version }}
-          VM="$PWD/CuisVM.app/Contents/Linux-x86_64/squeak"
-          chmod +x "$VM" "$PWD"/CuisVM.app/Contents/Linux-x86_64/lib/squeak/*/squeak
 
           cp "built/Cuis7.7-${VERSION}.image"   /tmp/test.image
           cp "built/Cuis7.7-${VERSION}.changes" /tmp/test.changes
@@ -127,8 +146,10 @@ jobs:
         run: find . /tmp -name 'CuisDebug-*.log' 2>/dev/null -exec sh -c 'echo "=== {} ==="; cat "{}"' \;
 
   # ---------------------------------------------------------------------------
-  # 2) Empaquetar por plataforma. Cada bundle lleva SOLO el binario correcto.
-  #    No corre el VM: solo copia archivos, así puede correr todo en x64.
+  # 2) Empaquetar por plataforma. Cada bundle baja el VM oficial de OpenSmalltalk
+  #    de su plataforma y lo acomoda en el layout CuisVM.app/Contents/<target>/
+  #    que esperan los launchers. Corre en ubuntu (el .dmg de macOS se extrae
+  #    con 7z, sin montar).
   # ---------------------------------------------------------------------------
   package:
     needs: [build-image, test]
@@ -137,11 +158,14 @@ jobs:
       matrix:
         include:
           - target: macOS
-            launchers: "RunCuisOnMac.sh RunCuisOnFinder.command"
+            vm_asset: "squeak.cog.spur_macos64ARMv8.dmg"
+            launchers: "RunQSmalltalkOnMac.sh RunQSmalltalkOnFinder.command"
           - target: Linux-x86_64
-            launchers: "RunCuisOnLinux.sh"
+            vm_asset: "squeak.cog.spur_linux64x64.tar.gz"
+            launchers: "RunQSmalltalkOnLinux.sh"
           - target: Linux-arm64
-            launchers: "RunCuisOnLinux.sh"
+            vm_asset: "squeak.cog.spur_linux64ARMv8.tar.gz"
+            launchers: "RunQSmalltalkOnLinux.sh"
     steps:
       - uses: actions/checkout@v6
 
@@ -151,11 +175,21 @@ jobs:
           name: built-image
           path: built
 
+      - name: Install p7zip (for .dmg extraction)
+        if: matrix.target == 'macOS'
+        run: sudo apt-get update && sudo apt-get install -y p7zip-full
+
+      - name: Download VM (${{ matrix.target }})
+        run: |
+          curl -fsSL -o "/tmp/${{ matrix.vm_asset }}" \
+            "${VM_BASE_URL}/${VM_RELEASE}/${{ matrix.vm_asset }}"
+
       - name: Assemble bundle
         run: |
           VERSION=${{ needs.build-image.outputs.version }}
           TARGET=${{ matrix.target }}
-          BUNDLE="Cuis7.7-${VERSION}-${TARGET}"
+          ASSET=${{ matrix.vm_asset }}
+          BUNDLE="qSmalltalk-${VERSION}-${TARGET}"
 
           mkdir -p "${BUNDLE}/CuisImage" "${BUNDLE}/CuisVM.app/Contents"
 
@@ -163,20 +197,27 @@ jobs:
           cp "built/Cuis7.7-${VERSION}.changes" "${BUNDLE}/CuisImage/"
           cp CuisImage/Cuis7.6.sources CuisImage/UnicodeData.txt "${BUNDLE}/CuisImage/"
 
-          cp -a CuisVM.app/Contents/Info.plist "${BUNDLE}/CuisVM.app/Contents/"
           case "$TARGET" in
             macOS)
-              cp -a CuisVM.app/Contents/MacOS     "${BUNDLE}/CuisVM.app/Contents/"
-              cp -a CuisVM.app/Contents/Resources "${BUNDLE}/CuisVM.app/Contents/"
+              # El .dmg trae Squeak.app/Contents/{MacOS,Resources,Info.plist}.
+              7z x "/tmp/${ASSET}" -o/tmp/macvm >/dev/null
+              APP=$(find /tmp/macvm -maxdepth 3 -type d -name 'Squeak.app' | head -1)
+              cp -a "${APP}/Contents/MacOS"     "${BUNDLE}/CuisVM.app/Contents/"
+              cp -a "${APP}/Contents/Resources" "${BUNDLE}/CuisVM.app/Contents/"
+              cp -a "${APP}/Contents/Info.plist" "${BUNDLE}/CuisVM.app/Contents/"
               ;;
-            Linux-x86_64|Linux-arm64)
-              cp -a "CuisVM.app/Contents/${TARGET}" "${BUNDLE}/CuisVM.app/Contents/"
+            Linux-*)
+              # El .tar.gz trae un único dir top con squeak + bin/ + lib/.
+              mkdir -p /tmp/linvm && tar xzf "/tmp/${ASSET}" -C /tmp/linvm
+              TOP=$(find /tmp/linvm -maxdepth 1 -mindepth 1 -type d | head -1)
+              mkdir -p "${BUNDLE}/CuisVM.app/Contents/${TARGET}"
+              cp -a "${TOP}/." "${BUNDLE}/CuisVM.app/Contents/${TARGET}/"
               ;;
           esac
 
           cp -r TrueTypeFonts "${BUNDLE}/"
           for l in ${{ matrix.launchers }}; do cp ".github/scripts/$l" "${BUNDLE}/"; done
-          chmod +x "${BUNDLE}"/RunCuisOn* 2>/dev/null || true
+          chmod +x "${BUNDLE}"/RunQSmalltalkOn* 2>/dev/null || true
 
           zip -ry "${BUNDLE}.zip" "${BUNDLE}/"
           ls -la "${BUNDLE}.zip"
@@ -185,16 +226,15 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bundle-${{ matrix.target }}
-          path: Cuis7.7-*-${{ matrix.target }}.zip
+          path: qSmalltalk-*-${{ matrix.target }}.zip
           retention-days: 1
 
   # ---------------------------------------------------------------------------
   # 2b) Firmar ad-hoc el bundle de macOS (sin notarización, sin secrets).
-  #     El job package corre en Linux y no puede firmar el .app: el linker deja
-  #     solo el binario interno firmado, no el bundle, y en Apple Silicon eso da
-  #     error -47 al abrir. Acá, en un runner macOS, le ponemos una firma ad-hoc
-  #     real a todo el .app. NO notariza: el usuario igual tiene que sacar la
-  #     cuarentena la primera vez (ver release notes), pero ya no aparece el -47.
+  #     El job package corre en Linux y no puede firmar el .app; acá, en un
+  #     runner macOS, le ponemos una firma ad-hoc real a todo el .app. NO
+  #     notariza: el usuario igual tiene que sacar la cuarentena la primera vez
+  #     (ver release notes), pero ya no aparece el error -47 en Apple Silicon.
   # ---------------------------------------------------------------------------
   sign-macos:
     needs: [build-image, package]
@@ -209,7 +249,7 @@ jobs:
       - name: Ad-hoc sign CuisVM.app
         run: |
           VERSION=${{ needs.build-image.outputs.version }}
-          BUNDLE="Cuis7.7-${VERSION}-macOS"
+          BUNDLE="qSmalltalk-${VERSION}-macOS"
           unzip -q "dist/${BUNDLE}.zip"
 
           codesign --force --deep --sign - "${BUNDLE}/CuisVM.app"
@@ -223,7 +263,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bundle-macOS
-          path: Cuis7.7-*-macOS.zip
+          path: qSmalltalk-*-macOS.zip
           overwrite: true
           retention-days: 1
 
@@ -255,24 +295,26 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: "v${{ needs.build-image.outputs.version }}"
-          name: "Cuis 7.7 #${{ needs.build-image.outputs.version }}"
+          name: "qSmalltalk #${{ needs.build-image.outputs.version }}"
           files: dist/*.zip
           body: |
-            Cuis 7.7, latest update #${{ needs.build-image.outputs.version }}
+            **qSmalltalk** — a Smalltalk that diverges from Cuis on purpose.
 
-            Imagen con las CoreUpdates aplicadas. Cada bundle trae el binario
-            correcto de su plataforma.
+            | | Versión |
+            |---|---|
+            | Imagen (Cuis 7.7, update aplicado) | `#${{ needs.build-image.outputs.version }}` |
+            | VM (OpenSmalltalk) | `${{ env.VM_RELEASE }}` |
 
             | Plataforma | Archivo | Arranque |
             |------------|---------|----------|
-            | macOS (universal arm64+x64) | `Cuis7.7-${{ needs.build-image.outputs.version }}-macOS.zip` | `./RunCuisOnMac.sh` |
-            | Linux x86_64 | `Cuis7.7-${{ needs.build-image.outputs.version }}-Linux-x86_64.zip` | `./RunCuisOnLinux.sh` |
-            | Linux arm64 | `Cuis7.7-${{ needs.build-image.outputs.version }}-Linux-arm64.zip` | `./RunCuisOnLinux.sh` |
+            | macOS (Apple Silicon) | `qSmalltalk-${{ needs.build-image.outputs.version }}-macOS.zip` | `./RunQSmalltalkOnMac.sh` |
+            | Linux x86_64 | `qSmalltalk-${{ needs.build-image.outputs.version }}-Linux-x86_64.zip` | `./RunQSmalltalkOnLinux.sh` |
+            | Linux arm64 | `qSmalltalk-${{ needs.build-image.outputs.version }}-Linux-arm64.zip` | `./RunQSmalltalkOnLinux.sh` |
 
             **macOS — primera vez:** si bajaste el zip por el navegador, macOS lo pone
             en cuarentena y Gatekeeper bloquea la VM (no está notarizada). Sacale la
             cuarentena una vez tras descomprimir:
 
             ```bash
-            xattr -dr com.apple.quarantine Cuis7.7-${{ needs.build-image.outputs.version }}-macOS
+            xattr -dr com.apple.quarantine qSmalltalk-${{ needs.build-image.outputs.version }}-macOS
             ```
