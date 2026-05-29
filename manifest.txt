@@ -1,0 +1,22 @@
+Tonel image export manifest
+Generated: 2026-05-29T00:27:19.418602-03:00
+Image name: /Users/gaston/Downloads/qSmalltalk-7965-macOS/CuisImage/Cuis7.7-7965.image
+Image version: Cuis7.7
+Exported class count: 760
+Exported method count: 19857
+Package directory count: 12
+Format: Tonel v3-compatible source
+
+Packages:
+- Collections
+- Compiler
+- Exceptions
+- Graphics
+- JSON
+- Kernel
+- McpServer
+- Morphic
+- Network
+- System
+- Tonel
+- Tools
